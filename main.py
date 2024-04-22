@@ -10,6 +10,11 @@ from state import StateDevice
 BATCH_SIZE = 32
 
 
+def setup_cuda():
+    device = torch.device('cuda')
+    torch.set_default_device(device)
+
+
 def main():
     qnet = SakikoNetwork(113, 299)
     tnet = SakikoNetwork(113, 299)
@@ -26,9 +31,6 @@ def main():
     mean_rewards = 0
     rewards = 0
     state, _ = instance.reset()
-    while state is None:
-        time.sleep(0.5)
-        state, _ = instance.reset()
     while True:
         action = agent.act_ex(state)
         next_state, reward, done, _ = instance.step(action)
@@ -44,7 +46,7 @@ def main():
             rewards = 0
             state, _ = instance.reset()
         else:
-            memory.push(Transition(state, action, next_state, reward))
+            memory.push(Transition(state, action, reward, next_state))
             if len(memory) > BATCH_SIZE:
                 transitions = memory.sample(BATCH_SIZE)
                 agent.learn(Transition(*zip(*transitions)))
@@ -52,4 +54,5 @@ def main():
 
 
 if __name__ == '__main__':
+    setup_cuda()
     main()

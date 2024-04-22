@@ -1,3 +1,4 @@
+import queue
 import time
 
 import cv2
@@ -52,7 +53,8 @@ def label_reward(label) -> int:
 class StateDevice(AdbDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.state: (np.ndarray, int) = (None, None)
+        self.state = queue.Queue(maxsize=1)
+        self.dirty = False
 
     def ready(self):
         # state: (STATE_FRAMES, 113, 299)
@@ -62,7 +64,11 @@ class StateDevice(AdbDevice):
         crops = state[:, 82:93, 121:177].reshape(-1, 1, 11, 56)
         crops = torch.tensor(crops, dtype=torch.float)
         reward = sum(map(label_reward, rwc(crops).argmax(1)))
-        self.state = (state, reward)
+        try:
+            self.state.put((state, reward))
+        except queue.Full:
+            print(f'[StateDevice] Queue Full')
+            self.dirty = True
 
 
 def test_crops(images, rewards):

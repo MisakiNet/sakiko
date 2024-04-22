@@ -1,26 +1,8 @@
 import adbutils
 import scrcpy
+from minidevice.maatouch import MaaTouch
 
 from config import *
-
-EVENT_DEV = '/dev/input/event4'
-
-EV_SYN = 0x00
-EV_KEY = 0x01
-EV_ABS = 0x03
-
-PRESS_DOWN = 1
-PRESS_UP = 0
-
-ABS_MT_TRACKING_ID = 57
-TRACKING_END = 0xFFFFFFFF
-ABS_MT_POSITION_X = 53
-ABS_MT_POSITION_Y = 54
-ABS_MT_SLOT = 47
-BTN_TOUCH = 330
-BTN_TOOL_FINGER = 325
-
-SYN_REPORT = 0
 
 
 class Device:
@@ -59,6 +41,7 @@ class AdbDevice(Device):
                 raise '[ADB] connect failed'
             self.device = self.adb.device()
         print(f'[ADB] Device: {self.device}')
+        self.maa = MaaTouch(self.device.serial)
         self.scrcpy = scrcpy.Client(device=self.device)
         self.scrcpy.add_listener(scrcpy.EVENT_FRAME, lambda event: self.on_frame(event))
         self.cnt = 0
@@ -74,61 +57,36 @@ class AdbDevice(Device):
             self.ready()
             self.frames = []
 
-    def send_event(self, typ, code, value):
-        self.device.shell(['sendevent', EVENT_DEV, hex(typ), hex(code), hex(value)])
-
     def slide_down(self, idx: int, vice: bool):
-        self.send_event(EV_ABS, ABS_MT_SLOT, vice)
         if not self.press[vice]:
             self.press[vice] = True
             self.track += 1
             self.press_track[vice] = self.track
-            self.send_event(EV_ABS, ABS_MT_TRACKING_ID, self.press_track[vice])
-            self.send_event(EV_KEY, BTN_TOUCH, PRESS_DOWN)
-            self.send_event(EV_KEY, BTN_TOOL_FINGER, PRESS_DOWN)
-        else:
-            self.send_event(EV_ABS, ABS_MT_TRACKING_ID, self.press_track[vice])
-        self.send_event(EV_ABS, ABS_MT_POSITION_X, 293 + 219 * idx)
-        self.send_event(EV_ABS, ABS_MT_POSITION_Y, 854)
-        self.send_event(EV_SYN, SYN_REPORT, 0)
+        self.maa.send(f'd {self.press_track[vice]} {293 + 219 * idx} 854 100\nc\n')
 
     def slide_pos(self, idx: int, vice, flick=False):
-        self.send_event(EV_ABS, ABS_MT_SLOT, vice)
-        self.send_event(EV_ABS, ABS_MT_TRACKING_ID, self.press_track[vice])
-        self.send_event(EV_ABS, ABS_MT_POSITION_X, 293 + 219 * idx)
-        self.send_event(EV_ABS, ABS_MT_POSITION_Y, 854 - 214 * flick)
-        self.send_event(EV_SYN, SYN_REPORT, 0)
+        self.maa.send(f'm {self.press_track[vice]} {293 + 219 * idx} {854 - 213 * flick} 100\nw 100\nc\n')
 
     def slide_up(self, vice: bool):
         if self.press[vice]:
-            self.send_event(EV_ABS, ABS_MT_SLOT, vice)
-            self.send_event(EV_ABS, ABS_MT_TRACKING_ID, TRACKING_END)
-            self.send_event(EV_KEY, BTN_TOUCH, PRESS_UP)
-            self.send_event(EV_KEY, BTN_TOOL_FINGER, PRESS_UP)
-            self.send_event(EV_SYN, SYN_REPORT, 0)
+            self.maa.send(f'u {self.press_track[vice]}\nc\n')
         self.press[vice] = False
 
     def click(self, idx: int, vice: bool):
-        print(f'Click {idx} {vice}')
         if idx == 0:
             return
-        x = 293 + 219 * idx
-        if self.press[vice]:
-            self.slide_pos(idx, vice)
-            self.slide_up(vice)
-        else:
-            self.device.click(x, 854)
+        if not self.press[vice]:
+            self.slide_down(idx, vice)
+        self.slide_pos(idx, vice)
+        self.slide_up(vice)
 
     def flick(self, idx: int, vice: bool):
-        print(f'Flick {idx} {vice}')
         if idx == 0:
             return
-        x = 293 + 219 * idx
-        if self.press[vice]:
-            self.slide_pos(idx, vice, True)
-            self.slide_up(vice)
-        else:
-            self.device.swipe(x, 854, x, 640, 100)
+        if not self.press[vice]:
+            self.slide_down(idx, vice)
+        self.slide_pos(idx, vice, True)
+        self.slide_up(vice)
 
     def slide_clear(self):
         if self.press[0]:
@@ -141,4 +99,4 @@ if __name__ == '__main__':
     device = AdbDevice()
     while True:
         k = int(input('>'))
-        device.click(k, False)
+        device.flick(k, False)
