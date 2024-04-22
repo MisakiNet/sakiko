@@ -9,7 +9,7 @@ class BangEnv:
         self.device = device
 
     def reset(self) -> (np.ndarray, int):
-        return self.device.state.get()
+        return self.device.state.receive()
 
     def step(self, action: torch.Tensor):
         l1, l2, r1, r2 = de_control(action)
@@ -29,7 +29,7 @@ class BangEnv:
                     self.device.key_down(r1, True)
                 case _:
                     self.device.flick(r1, True)
-        state, reward = self.device.state.get()
+        state, reward = self.device.state.receive()
         if reward > 100:
             reward = 0
             done = True
@@ -38,4 +38,4 @@ class BangEnv:
         if self.device.dirty:
             done = True
             self.device.dirty = False
-        return state, reward, done, None
+        return state, reward, done

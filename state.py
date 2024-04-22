@@ -1,4 +1,4 @@
-import queue
+import threading
 import time
 
 import cv2
@@ -8,9 +8,27 @@ import torch
 from device import AdbDevice
 from reward.model import RewardClassifier
 
-rwc = RewardClassifier()
-rwc.load_state_dict(torch.load('reward/checkpoint/model_0.000038.pt'))
-rwc.eval()
+
+class SingleElementQueue:
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.element = None
+
+    def send(self, element):
+        with self.condition:
+            if self.element is not None:
+                self.element = element
+            else:
+                self.element = element
+                self.condition.notify_all()
+
+    def receive(self):
+        with self.condition:
+            while self.element is None:
+                self.condition.wait()
+            element = self.element
+            self.element = None
+            return element
 
 
 def process(frame: np.ndarray):
@@ -45,7 +63,7 @@ def label_reward(label) -> int:
         case 5:  # perfect
             return 3
         case 6:  # done
-            return 100
+            return 1000
         case _:
             raise 'Unreachable'
 
@@ -53,8 +71,11 @@ def label_reward(label) -> int:
 class StateDevice(AdbDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.state = queue.Queue(maxsize=1)
         self.dirty = False
+        self.rwc = RewardClassifier()
+        self.rwc.load_state_dict(torch.load('reward/save/model_96.pt'))
+        self.rwc.eval()
+        self.state = SingleElementQueue()
 
     def ready(self):
         # state: (STATE_FRAMES, 113, 299)
@@ -63,12 +84,9 @@ class StateDevice(AdbDevice):
         # (3, 11, 56) -> (3, 1, 11, 56)
         crops = state[:, 82:93, 121:177].reshape(-1, 1, 11, 56)
         crops = torch.tensor(crops, dtype=torch.float)
-        reward = sum(map(label_reward, rwc(crops).argmax(1)))
-        try:
-            self.state.put((state, reward))
-        except queue.Full:
-            print(f'[StateDevice] Queue Full')
-            self.dirty = True
+        reward = sum(map(label_reward, self.rwc(crops).argmax(1)))
+        print(f'[StateDevice] Reward: {reward}')
+        self.state.send((state, reward))
 
 
 def test_crops(images, rewards):
@@ -82,5 +100,5 @@ def test_crops(images, rewards):
 
 if __name__ == '__main__':
     sd = StateDevice()
-    sd.start()
-    time.sleep(5)
+    sd.start(threaded=True)
+    time.sleep(5000)

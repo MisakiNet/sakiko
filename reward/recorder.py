@@ -22,5 +22,4 @@ def ready_func(frames):
 if __name__ == '__main__':
     # os.mkdir('temp')
     device = AdbDevice()
-    device.ready = ready_func
     device.start()

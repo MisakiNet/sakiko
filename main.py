@@ -12,6 +12,7 @@ BATCH_SIZE = 32
 
 def setup_cuda():
     device = torch.device('cuda')
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
     torch.set_default_device(device)
 
 
@@ -33,7 +34,7 @@ def main():
     state, _ = instance.reset()
     while True:
         action = agent.act_ex(state)
-        next_state, reward, done, _ = instance.step(action)
+        next_state, reward, done = instance.step(action)
         rewards += reward
         if done:
             device.slide_clear()

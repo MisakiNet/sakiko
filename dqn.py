@@ -68,15 +68,15 @@ class DqnAgent:
     def act_ex(self, state):
         if random.random() > self.greedy():
             with torch.no_grad():
-                state = torch.tensor(state, dtype=torch.float)
-                return self.Q(state)
+                state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+                return self.Q(state)[0]
         else:
             return self.rand_func()
 
     def act(self, state):
         with torch.no_grad():
-            state = torch.tensor(state, dtype=torch.float)
-            return self.Q(state)
+            state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+            return self.Q(state)[0]
 
     def update_target(self):
         self.T.load_state_dict(self.Q.state_dict())
@@ -111,7 +111,7 @@ class DqnAgent:
         states = torch.tensor(np.stack(states), dtype=torch.float)
         next_states = torch.tensor(np.stack(next_states), dtype=torch.float)
         rewards = torch.tensor(np.stack(rewards), dtype=torch.float)
-        actions = torch.tensor(torch.stack(actions), dtype=torch.float)
+        actions = torch.stack(actions)
 
         q_val = self.get_action_val(self.Q(states), actions)
         next_t_val = self.get_policy_val(self.T(next_states))
