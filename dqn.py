@@ -89,6 +89,8 @@ class DqnAgent:
         self.cnt = 0
 
     def greedy(self):
+        if self.epsilon_decay == 0:
+            return self.epsilon
         return self.epsilon + (1. - self.epsilon) * \
             math.exp(-1. * self.cnt / self.epsilon_decay)
 

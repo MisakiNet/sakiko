@@ -57,46 +57,41 @@ class AdbDevice(Device):
             self.ready()
             self.frames = []
 
-    def slide_down(self, idx: int, vice: bool):
-        if not self.press[vice]:
-            self.press[vice] = True
-            self.track += 1
-            self.press_track[vice] = self.track
-        self.maa.send(f'd {self.press_track[vice]} {293 + 219 * idx} 854 100\nc\n')
+    def send(self, l1, l2, r1, r2):
+        cmd = []
+        # group2: 0: click, 1: down, 2: flick
+        if l1:
+            cmd.append(f"{'m' if self.press[0] else 'd'} 0 {293 + 219 * l1} 854 100")
+            if l2 == 2:
+                cmd.append(f'm 0 {293 + 219 * l1} 641 100')
+            if l2 != 1:
+                cmd.append('u 0')
+            self.press[0] = l2 == 1
+        if l1 != r1 and r1:
+            cmd.append(f"{'m' if self.press[1] else 'd'} 1 {293 + 219 * r1} 854 100")
+            if r2 == 2:
+                cmd.append(f'm 1 {293 + 219 * r1} 641 100')
+            if r2 != 1:
+                cmd.append('u 1')
+            self.press[1] = r2 == 1
+        cmd = '\n'.join(cmd) + '\nc\n'
+        print(cmd)
+        self.maa.send(cmd)
 
-    def slide_pos(self, idx: int, vice, flick=False):
-        self.maa.send(f'm {self.press_track[vice]} {293 + 219 * idx} {854 - 213 * flick} 100\nw 100\nc\n')
-
-    def slide_up(self, vice: bool):
-        if self.press[vice]:
-            self.maa.send(f'u {self.press_track[vice]}\nc\n')
-        self.press[vice] = False
-
-    def click(self, idx: int, vice: bool):
-        if idx == 0:
-            return
-        if not self.press[vice]:
-            self.slide_down(idx, vice)
-        self.slide_pos(idx, vice)
-        self.slide_up(vice)
-
-    def flick(self, idx: int, vice: bool):
-        if idx == 0:
-            return
-        if not self.press[vice]:
-            self.slide_down(idx, vice)
-        self.slide_pos(idx, vice, True)
-        self.slide_up(vice)
-
-    def slide_clear(self):
+    def clear(self):
+        cmd = ''
         if self.press[0]:
-            self.slide_up(False)
+            cmd += 'u 0\n'
+            self.press[0] = False
         if self.press[1]:
-            self.slide_up(True)
+            cmd += 'u 1\n'
+            self.press[1] = False
+        if cmd:
+            self.maa.send(cmd + 'c\n')
 
 
 if __name__ == '__main__':
     device = AdbDevice()
     while True:
         k = int(input('>'))
-        device.flick(k, False)
+        device.send(k, 2, k + 1, 2)
