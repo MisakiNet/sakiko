@@ -75,7 +75,6 @@ class AdbDevice(Device):
                 cmd.append('u 1')
             self.press[1] = r2 == 1
         cmd = '\n'.join(cmd) + '\nc\n'
-        print(cmd)
         self.maa.send(cmd)
 
     def clear(self):

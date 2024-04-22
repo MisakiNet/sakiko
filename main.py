@@ -6,7 +6,7 @@ from env import BangEnv
 from model import SakikoNetwork
 from state import StateDevice
 
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
 device = torch.device('cuda')
 torch.set_default_tensor_type(torch.cuda.FloatTensor)
@@ -20,24 +20,24 @@ instance = BangEnv(device)
 device.start(threaded=True)
 
 
-def train_from(q_path, memory_path):
-    torch.load(q_path, qnet)
-    memory = Memory.load(memory_path, 10000)
-
+def train_from(q_path):
+    qnet.load_state_dict(torch.load(q_path))
+    memory = Memory(10000)
     agent = DqnAgent(qnet=qnet, tnet=tnet,
                      rand_func=lambda: torch.rand(22),
-                     lr=1e-3, gamma=0.5, epsilon=0.01, epsilon_decay=0,
+                     lr=1e-3, gamma=0.5, epsilon=0.5, epsilon_decay=0,
                      target_update_batch=5)
 
     ep = 0
     rewards = 0
+    min_loss = float('inf')
     state, _ = instance.reset()
     while True:
         action = agent.act_ex(state)
         next_state, reward, done = instance.step(action)
         rewards = rewards * 0.9 + reward * 0.1
         if done:
-            device.slide_clear()
+            device.clear()
             ep += 1
             print(f'Episode {ep}, Mean Rewards: {rewards}')
             eps = int(input('>'))
@@ -47,6 +47,14 @@ def train_from(q_path, memory_path):
                     transitions = memory.sample(BATCH_SIZE)
                     loss = agent.learn(Transition(*zip(*transitions)))
                     pbar.set_description(f'Loss: {loss}')
+                    if loss < min_loss:
+                        min_loss = loss
+                        torch.save(qnet.state_dict(), 'checkpoint/best.pth')
+                        print(f'\nSave best model with loss: {loss}')
+            qnet.load_state_dict(torch.load('checkpoint/best.pth'))
+            tnet.load_state_dict(qnet.state_dict())
+            print('Best model loaded')
+            min_loss += 20
             rewards = 0
             state, _ = instance.reset()
         else:
@@ -84,6 +92,7 @@ def main():
     mean_rewards = 0
     rewards = 0
     state, _ = instance.reset()
+    min_loss = float('inf')
     while True:
         action = agent.act_ex(state)
         next_state, reward, done = instance.step(action)
@@ -93,10 +102,6 @@ def main():
             ep += 1
             mean_rewards = 0.9 * mean_rewards + 0.1 * rewards
             print(f'Episode {ep}, Mean Rewards: {mean_rewards}')
-
-            memory_path = input('Save memory (memory/?.pkl): ')
-            if memory_path != 'n':
-                memory.save(f'memory/{memory_path}.pkl')
 
             inp = input('>')
             if inp == 'y':
@@ -108,7 +113,15 @@ def main():
                     transitions = memory.sample(BATCH_SIZE)
                     loss = agent.learn(Transition(*zip(*transitions)))
                     pbar.set_description(f'Loss: {loss}')
+                    if loss < min_loss:
+                        min_loss = loss
+                        torch.save(qnet.state_dict(), 'checkpoint/best.pth')
+                        print(f'\nSave best model with loss: {loss}')
             rewards = 0
+            qnet.load_state_dict(torch.load('checkpoint/best.pth'))
+            tnet.load_state_dict(qnet.state_dict())
+            print('Best model loaded')
+            min_loss += 20
             state, _ = instance.reset()
         else:
             memory.push(Transition(state, action, reward, next_state))
@@ -116,6 +129,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
-    # train_from('checkpoint/b.pth', 'memory/c.pkl')
-    # evaluate('checkpoint/b_s.pth')
+    # main()
+    # train_from('checkpoint/best.pth')
+    evaluate('checkpoint/best.pth')
