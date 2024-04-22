@@ -1,13 +1,15 @@
 from torch import nn
 
+from config import *
+
 
 class SakikoNetwork(nn.Module):
     def __init__(self, width, height):
         super().__init__()
         # input: torch.Size([height, width, STATE_FRAMES])
-        # output: torch.Size([21])
+        # output: torch.Size([22])
         self.net = nn.Sequential(
-            nn.Conv2d(5, 32, kernel_size=3, stride=1),
+            nn.Conv2d(STATE_FRAMES, 32, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=1),
             nn.ReLU(),
@@ -20,7 +22,7 @@ class SakikoNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 21)
+            nn.Linear(64, 22)
         )
 
     def forward(self, x):

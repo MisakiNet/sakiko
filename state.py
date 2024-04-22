@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import numpy as np
 import torch
@@ -47,21 +49,20 @@ def label_reward(label) -> int:
             raise 'Unreachable'
 
 
-def ready_func(frames):
-    # images: (113, 299, 5)
-    images = np.stack(list(map(process, frames)), axis=2) / 255.
-    # crop [82:93, 121:177] to get the reward
-    # (11, 56, 3) -> (3, 1, 11, 56)
-    crops = np.transpose(images[82:93, 121:177], (2, 0, 1)).reshape(3, 1, 11, 56)
-    crops = torch.tensor(crops, dtype=torch.float)
+class StateDevice(AdbDevice):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.state: (np.ndarray, int) = (None, None)
 
-    # state: torch.Size([113, 299, 5])
-    state = torch.tensor(images, dtype=torch.float)
-    reward = sum(map(label_reward, rwc(crops).argmax(1)))
-    if reward > 100:
-        print('Done')
-    else:
-        print(reward)
+    def ready(self):
+        # state: (STATE_FRAMES, 113, 299)
+        state = np.stack(list(map(process, self.frames))) / 255.
+        # crop [:, 82:93, 121:177] to get the reward
+        # (3, 11, 56) -> (3, 1, 11, 56)
+        crops = state[:, 82:93, 121:177].reshape(-1, 1, 11, 56)
+        crops = torch.tensor(crops, dtype=torch.float)
+        reward = sum(map(label_reward, rwc(crops).argmax(1)))
+        self.state = (state, reward)
 
 
 def test_crops(images, rewards):
@@ -74,6 +75,6 @@ def test_crops(images, rewards):
 
 
 if __name__ == '__main__':
-    device = AdbDevice(host='127.0.0.1', port=21503)
-    device.ready = ready_func
-    device.start()
+    sd = StateDevice()
+    sd.start()
+    time.sleep(5)
