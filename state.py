@@ -85,7 +85,7 @@ class StateDevice(AdbDevice):
         crops = state[:, 82:93, 121:177].reshape(-1, 1, 11, 56)
         crops = torch.tensor(crops, dtype=torch.float)
         reward = sum(map(label_reward, self.rwc(crops).argmax(1)))
-        print(f'[StateDevice] Reward: {reward}')
+        # print(f'[StateDevice] Reward: {reward}')
         self.state.send((state, reward))
 
 

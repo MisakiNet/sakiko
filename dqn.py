@@ -1,4 +1,5 @@
 import math
+import pickle
 import random
 from collections import deque, namedtuple
 
@@ -19,6 +20,32 @@ class Memory:
 
     def sample(self, batch_size: int):
         return random.sample(self.memory, batch_size)
+
+    def save(self, filename: str):
+        data = []
+        for transition in self.memory:
+            state, action, reward, next_state = transition
+            state_data = [arr.tobytes() for arr in state]
+            next_state_data = [arr.tobytes() for arr in next_state]
+            action_data = action.cpu().numpy().tobytes()
+            reward_data = reward
+            data.append((state_data, action_data, reward_data, next_state_data))
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load(cls, filename: str, capacity: int):
+        with open(filename, 'rb') as f:
+            data = pickle.load(f)
+        memory = cls(capacity)
+        for state_data, action_data, reward_data, next_state_data in data:
+            state = [np.frombuffer(arr, dtype=np.float32) for arr in state_data]
+            action = torch.from_numpy(np.frombuffer(action_data, dtype=np.float32))
+            reward = reward_data
+            next_state = [np.frombuffer(arr, dtype=np.float32) for arr in next_state_data]
+            transition = Transition(state, action, reward, next_state)
+            memory.push(transition)
+        return memory
 
     def __len__(self):
         return len(self.memory)
@@ -121,6 +148,6 @@ class DqnAgent:
         loss = F.mse_loss(q_val, target)
         loss.backward()
         self.optimizer.step()
-
         if self.cnt % self.target_update_batch == 0:
             self.update_target()
+        return loss

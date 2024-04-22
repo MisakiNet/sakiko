@@ -1,6 +1,5 @@
-import time
-
 import torch
+from tqdm import trange
 
 from dqn import DqnAgent, Memory, Transition
 from env import BangEnv
@@ -21,7 +20,8 @@ def main():
     tnet = SakikoNetwork(113, 299)
     agent = DqnAgent(qnet=qnet, tnet=tnet,
                      rand_func=lambda: torch.rand(22),
-                     lr=1e-3, gamma=0.5, epsilon=0.01, epsilon_decay=300)
+                     lr=1e-3, gamma=0.5, epsilon=0.01, epsilon_decay=300,
+                     target_update_batch=5)
     memory = Memory(10000)
 
     device = StateDevice()
@@ -38,19 +38,28 @@ def main():
         rewards += reward
         if done:
             device.slide_clear()
-            inp = input('>')
-            if inp == 'y':
-                break
             ep += 1
             mean_rewards = 0.9 * mean_rewards + 0.1 * rewards
             print(f'Episode {ep}, Mean Rewards: {mean_rewards}')
+
+            memory_path = input('Save memory (memory/?.pkl): ')
+            if memory_path != 'n':
+                memory.save(f'memory/{memory_path}.pkl')
+
+            inp = input('>')
+            if inp == 'y':
+                break
+            eps = int(inp)
+            if len(memory) > BATCH_SIZE:
+                pbar = trange(eps)
+                for _ in pbar:
+                    transitions = memory.sample(BATCH_SIZE)
+                    loss = agent.learn(Transition(*zip(*transitions)))
+                    pbar.set_description(f'Loss: {loss}')
             rewards = 0
             state, _ = instance.reset()
         else:
             memory.push(Transition(state, action, reward, next_state))
-            if len(memory) > BATCH_SIZE:
-                transitions = memory.sample(BATCH_SIZE)
-                agent.learn(Transition(*zip(*transitions)))
             state = next_state
 
 
