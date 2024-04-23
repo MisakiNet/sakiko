@@ -1,3 +1,5 @@
+import time
+
 import adbutils
 import scrcpy
 from minidevice.maatouch import MaaTouch
@@ -59,22 +61,29 @@ class AdbDevice(Device):
 
     def send(self, l1, l2, r1, r2):
         cmd = []
+        tail = []
         # group2: 0: click, 1: down, 2: flick
+        wt = False
         if l1:
             cmd.append(f"{'m' if self.press[0] else 'd'} 0 {293 + 219 * l1} 854 100")
             if l2 == 2:
-                cmd.append(f'm 0 {293 + 219 * l1} 641 100')
+                wt = True
+                cmd.append(f'm 0 {293 + 219 * l1} 700 100')
             if l2 != 1:
-                cmd.append('u 0')
-            self.press[0] = l2 == 1
+                tail.append('u 0')
+            self.press[0] = l2 == 12
         if l1 != r1 and r1:
             cmd.append(f"{'m' if self.press[1] else 'd'} 1 {293 + 219 * r1} 854 100")
             if r2 == 2:
-                cmd.append(f'm 1 {293 + 219 * r1} 641 100')
+                wt = True
+                cmd.append(f'm 1 {293 + 219 * r1} 700 100')
             if r2 != 1:
-                cmd.append('u 1')
+                tail.append('u 1')
             self.press[1] = r2 == 1
-        cmd = '\n'.join(cmd) + '\nc\n'
+        if wt:
+            cmd.append('w 40')
+        cmd = '\n'.join(cmd + tail) + '\nc\n'
+        # print(cmd)
         self.maa.send(cmd)
 
     def clear(self):
@@ -92,5 +101,8 @@ class AdbDevice(Device):
 if __name__ == '__main__':
     device = AdbDevice()
     while True:
-        k = int(input('>'))
-        device.send(k, 2, k + 1, 2)
+        device.send(1, 2, 2, 2)
+        time.sleep(0.1)
+    # while True:
+    #     k = int(input('>'))
+    #     device.send(k, 2, k + 1, 2)

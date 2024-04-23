@@ -12,8 +12,8 @@ device = torch.device('cuda')
 torch.set_default_tensor_type(torch.cuda.FloatTensor)
 torch.set_default_device(device)
 
-qnet = SakikoNetwork(113, 299)
-tnet = SakikoNetwork(113, 299)
+qnet = SakikoNetwork()
+tnet = SakikoNetwork()
 
 device = StateDevice()
 instance = BangEnv(device)
@@ -25,8 +25,8 @@ def train_from(q_path):
     memory = Memory(10000)
     agent = DqnAgent(qnet=qnet, tnet=tnet,
                      rand_func=lambda: torch.rand(22),
-                     lr=1e-3, gamma=0.5, epsilon=0.5, epsilon_decay=0,
-                     target_update_batch=5)
+                     lr=1e-3, gamma=0.9, epsilon=0.3, epsilon_decay=800,
+                     target_update_batch=3)
 
     ep = 0
     rewards = 0
@@ -40,13 +40,16 @@ def train_from(q_path):
             device.clear()
             ep += 1
             print(f'Episode {ep}, Mean Rewards: {rewards}')
-            eps = int(input('>'))
+            eps = input('>')
+            if eps == 'y':
+                break
+            eps = int(eps)
             if len(memory) > BATCH_SIZE:
                 pbar = trange(eps)
                 for _ in pbar:
                     transitions = memory.sample(BATCH_SIZE)
                     loss = agent.learn(Transition(*zip(*transitions)))
-                    pbar.set_description(f'Loss: {loss}')
+                    pbar.set_postfix(loss=loss.item())
                     if loss < min_loss:
                         min_loss = loss
                         torch.save(qnet.state_dict(), 'checkpoint/best.pth')
@@ -54,6 +57,7 @@ def train_from(q_path):
             qnet.load_state_dict(torch.load('checkpoint/best.pth'))
             tnet.load_state_dict(qnet.state_dict())
             print('Best model loaded')
+            input('Press Enter to start the next train: ')
             min_loss += 20
             rewards = 0
             state, _ = instance.reset()
@@ -66,8 +70,8 @@ def evaluate(q_path):
     qnet.load_state_dict(torch.load(q_path))
     agent = DqnAgent(qnet=qnet, tnet=tnet,
                      rand_func=lambda: torch.rand(22),
-                     lr=1e-3, gamma=0.5, epsilon=0.01, epsilon_decay=0,
-                     target_update_batch=5)
+                     lr=1e-3, gamma=0.9, epsilon=0.01, epsilon_decay=0,
+                     target_update_batch=3)
     rewards = 0
     input('Press Enter to start: ')
     print('Ready!')
@@ -84,13 +88,14 @@ def evaluate(q_path):
 def main():
     agent = DqnAgent(qnet=qnet, tnet=tnet,
                      rand_func=lambda: torch.rand(22),
-                     lr=1e-3, gamma=0.5, epsilon=0.01, epsilon_decay=300,
-                     target_update_batch=5)
+                     lr=1e-3, gamma=0.9, epsilon=0.3, epsilon_decay=1000,
+                     target_update_batch=3)
     memory = Memory(10000)
 
     ep = 0
     mean_rewards = 0
     rewards = 0
+    input('Press enter to start: ')
     state, _ = instance.reset()
     min_loss = float('inf')
     while True:
@@ -103,7 +108,7 @@ def main():
             mean_rewards = 0.9 * mean_rewards + 0.1 * rewards
             print(f'Episode {ep}, Mean Rewards: {mean_rewards}')
 
-            inp = input('>')
+            inp = input('eps >')
             if inp == 'y':
                 break
             eps = int(inp)
@@ -112,7 +117,7 @@ def main():
                 for _ in pbar:
                     transitions = memory.sample(BATCH_SIZE)
                     loss = agent.learn(Transition(*zip(*transitions)))
-                    pbar.set_description(f'Loss: {loss}')
+                    pbar.set_postfix(loss=loss.item())
                     if loss < min_loss:
                         min_loss = loss
                         torch.save(qnet.state_dict(), 'checkpoint/best.pth')
@@ -121,6 +126,7 @@ def main():
             qnet.load_state_dict(torch.load('checkpoint/best.pth'))
             tnet.load_state_dict(qnet.state_dict())
             print('Best model loaded')
+            input('Press Enter to start the next train: ')
             min_loss += 20
             state, _ = instance.reset()
         else:
@@ -129,6 +135,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     # train_from('checkpoint/best.pth')
     evaluate('checkpoint/best.pth')
